@@ -90,78 +90,86 @@ class TreasureHuntEnv(gym.Env):
 
 import numpy as np
 
-# Parameters
-gamma = 0.9  # Discount factor (how much we value future rewards)
-theta = 1e-6  # Convergence threshold (stop when updates are smaller than this)
+# Set up the environment
+env = TreasureHuntEnv()
 
-# Initialize the grid and environment (you can use the custom TreasureHuntEnv here)
-grid_size = (5, 5)
-# Define the grid: [S, F, F, H, T, F, G]
-# Note: You may need to modify this in your custom environment to match actual tile positions
-grid = [
-    ['S', 'F', 'F', 'H', 'T'],
-    ['F', 'H', 'F', 'F', 'F'],
-    ['F', 'F', 'F', 'T', 'F'],
-    ['T', 'F', 'H', 'F', 'F'],
-    ['F', 'F', 'F', 'F', 'G']
-]
-treasure_positions = [(0, 4), (2, 3), (3, 0)]  # Locations of treasures
-goal_position = (4, 4)  # Goal position
+# Parameters for Value Iteration
+gamma = 0.9  # Discount factor (importance of future rewards)
+theta = 1e-6  # Convergence threshold (stop when the value function is stable)
 
-# Define the possible actions (up, down, left, right)
-actions = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # Left, Right, Up, Down
-action_space = len(actions)
+# Initialize the value function (V) for each state in the grid
+V = np.zeros((env.grid_size[0], env.grid_size[1]))  # Initialize state values to 0
 
-# Initialize the value function (V) for each state (state-value function)
-V = np.zeros((5, 5))  # 5x5 grid, initially all values are 0
+# Initialize the value function for treasures collected
+V_treasure_collected = np.zeros(len(env.treasure_positions))  # No treasures collected initially
 
-# Define rewards based on the tiles
-def get_reward(state):
-    row, col = state
-    tile = grid[row][col]
-    
-    if tile == 'T':
-        return 5  # Reward for treasure
-    elif tile == 'G':
-        return 10  # Reward for goal
+# Define the Bellman Update for Value Iteration
+def get_reward(state, action, treasures_collected):
+    row, col, _ = state
+    move_dict = {
+        0: (-1, 0),  # up
+        1: (1, 0),   # down
+        2: (0, -1),  # left
+        3: (0, 1)    # right
+    }
+
+    # Calculate new position
+    new_row = row + move_dict[action][0]
+    new_col = col + move_dict[action][1]
+
+    # Ensure the new position is within grid bounds
+    if new_row < 0 or new_row >= env.grid_size[0] or new_col < 0 or new_col >= env.grid_size[1]:
+        return state, 0, False  # Invalid move, no reward
+
+    # Get the tile at the new position
+    tile = env.grid[new_row][new_col]
+
+    # Update treasure collection status
+    if tile == 'T' and not treasures_collected[env.treasure_positions.index((new_row, new_col))]:
+        treasures_collected[env.treasure_positions.index((new_row, new_col))] = True
+        reward = 5  # Collecting a treasure
+        tile = 'F'  # Convert the treasure tile into a frozen tile (F)
+    elif tile == 'F':
+        reward = 0  # No reward for frozen tiles
     elif tile == 'H':
-        return -10  # Penalty for hole
-    elif tile == 'F' or tile == 'S':
-        return 0  # No reward for frozen or start tiles
-    return 0
+        reward = -10  # Falling into a hole (H)
+        done = True
+    elif tile == 'G':
+        reward = 10  # Reaching the goal (G)
+        done = True
+    else:
+        reward = 0  # Default reward for other tiles
+
+    return (new_row, new_col, treasures_collected), reward, tile == 'H' or tile == 'G'
 
 # Value Iteration Algorithm
 def value_iteration():
     global V
     while True:
-        delta = 0
-        # Iterate over all states in the grid
-        for row in range(5):
-            for col in range(5):
+        delta = 0  # Track how much the value function changes
+        # Iterate over all positions (states) in the grid
+        for row in range(env.grid_size[0]):
+            for col in range(env.grid_size[1]):
                 old_value = V[row, col]
-                # For each state, check all possible actions
                 action_values = []
-                for action in actions:
-                    new_row = row + action[0]
-                    new_col = col + action[1]
-                    # Check if the new position is valid (within bounds)
-                    if 0 <= new_row < 5 and 0 <= new_col < 5:
-                        reward = get_reward((new_row, new_col))
-                        action_values.append(reward + gamma * V[new_row, new_col])
-                    else:
-                        action_values.append(-float('inf'))  # Invalid moves get a very low value
+                # Check all possible actions
+                for action in range(env.action_space.n):
+                    # Get reward and next state
+                    next_state, reward, done = get_reward((row, col, [False] * len(env.treasure_positions)), action, [False] * len(env.treasure_positions))
+                    # Calculate the value for each action
+                    action_values.append(reward + gamma * V[next_state[0], next_state[1]])
                 
-                # Bellman update: Take the max of the possible actions
+                # Bellman update: Take the max value of all possible actions
                 V[row, col] = max(action_values)
-                delta = max(delta, abs(old_value - V[row, col]))
-        
-        # Check for convergence (if the value function is stable)
+                delta = max(delta, abs(old_value - V[row, col]))  # Track largest change in value
+
+        # Convergence check: If the change in value is smaller than the threshold, we stop
         if delta < theta:
             break
 
-# Run value iteration
+# Run the value iteration process
 value_iteration()
 
-# Display the resulting state-value function (V*)
-print("State-value function V* (after value iteration):")
+# Display the final state-value function V*
+print("State-value function V* after value iteration:")
 print(V)
