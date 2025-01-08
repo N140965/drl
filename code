@@ -173,3 +173,146 @@ value_iteration()
 # Display the final state-value function V*
 print("State-value function V* after value iteration:")
 print(V)
+
+-----------------------------policy Improvement-------------------------
+import numpy as np
+
+# Policy Improvement Algorithm
+def policy_improvement():
+    # Initialize the policy (random policy initially)
+    policy = np.zeros((env.grid_size[0], env.grid_size[1]), dtype=int)  # action space: up=0, down=1, left=2, right=3
+    
+    # Policy evaluation based on the value function (V*)
+    for row in range(env.grid_size[0]):
+        for col in range(env.grid_size[1]):
+            action_values = []
+            for action in range(env.action_space.n):
+                # Compute the reward and next state for each action
+                next_state, reward, done = get_reward((row, col, [False] * len(env.treasure_positions)), action, [False] * len(env.treasure_positions))
+                
+                # Use V(s') in Bellman equation (greedy policy improvement)
+                action_values.append(reward + gamma * V[next_state[0], next_state[1]])
+            
+            # Select the action that maximizes the state value (greedy choice)
+            policy[row, col] = np.argmax(action_values)
+    
+    return policy
+
+# Run the policy improvement
+optimal_policy = policy_improvement()
+
+# Print the optimal policy for each state in the grid
+print("Optimal Policy (Greedy Policy from Value Iteration):")
+for row in range(env.grid_size[0]):
+    policy_row = []
+    for col in range(env.grid_size[1]):
+        action = optimal_policy[row, col]
+        # Convert action to its string equivalent: Up, Down, Left, Right
+        if action == 0:
+            policy_row.append('↑')
+        elif action == 1:
+            policy_row.append('↓')
+        elif action == 2:
+            policy_row.append('←')
+        elif action == 3:
+            policy_row.append('→')
+    print(" ".join(policy_row))
+-----------------------Optimal Value Function----------------------------------
+# Display the final state-value function V* after value iteration
+print("Optimal Value Function V* after Value Iteration:")
+for row in range(env.grid_size[0]):
+    value_row = []
+    for col in range(env.grid_size[1]):
+        # Fetch the value for each state (row, col)
+        value_row.append(f"{V[row, col]:.2f}")
+    print(" ".join(value_row))
+-------------------------------Visualization---------------------------------
+import matplotlib.pyplot as plt
+
+def visualize_policy(policy):
+    # Define the action symbols: up=↑, down=↓, left=←, right=→
+    action_symbols = ['↑', '↓', '←', '→']
+    
+    # Create a grid for the policy visualization
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Loop through each position in the grid and add the action symbol
+    for row in range(env.grid_size[0]):
+        for col in range(env.grid_size[1]):
+            action = policy[row, col]
+            ax.text(col, row, action_symbols[action], ha='center', va='center', fontsize=15, color='black')
+    
+    # Set up the gridlines
+    ax.set_xticks(np.arange(-0.5, env.grid_size[1], 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, env.grid_size[0], 1), minor=True)
+    ax.grid(which='minor', color='k', linestyle='-', linewidth=2)
+    
+    # Set the axis limits
+    ax.set_xlim(-0.5, env.grid_size[1] - 0.5)
+    ax.set_ylim(env.grid_size[0] - 0.5, -0.5)
+    
+    # Remove axis labels and ticks
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    
+    # Display the grid with actions
+    plt.title("Optimal Policy Visualization")
+    plt.show()
+
+# Visualize the learned optimal policy
+visualize_policy(optimal_policy)
+---------------------Evaluate policy---------------------------------
+def evaluate_policy(policy, num_episodes=100):
+    total_rewards = []
+    
+    for episode in range(num_episodes):
+        state = env.reset()  # Reset the environment at the start of each episode
+        done = False
+        total_reward = 0
+        
+        # Run the agent in the environment following the learned policy
+        while not done:
+            row, col, _ = state  # Extract the position (row, col) and treasure information
+            action = policy[row, col]  # Select the action according to the policy
+            
+            # Take the action and observe the outcome
+            next_state, reward, done, _ = env.step(action)
+            
+            # Update total reward
+            total_reward += reward
+            
+            # Update state
+            state = next_state
+        
+        # Append the total reward for the current episode
+        total_rewards.append(total_reward)
+    
+    # Compute and print the average reward across all episodes
+    average_reward = np.mean(total_rewards)
+    print(f"Average Reward over {num_episodes} episodes: {average_reward:.2f}")
+    return average_reward
+-----------main block------------------------
+# Main execution block
+
+# Step 1: Perform value iteration (already done, assuming V is populated)
+# Note: Ensure the V array has been filled during the value iteration process
+
+# Step 2: Improve the policy using the value function from value iteration
+optimal_policy = policy_improvement()
+
+# Step 3: Visualize the learned optimal policy
+visualize_policy(optimal_policy)
+
+# Step 4: Evaluate the optimal policy over multiple episodes
+average_reward = evaluate_policy(optimal_policy, num_episodes=100)
+
+# Step 5: Print the optimal value function for reference
+print("Optimal Value Function V* after Value Iteration:")
+for row in range(env.grid_size[0]):
+    value_row = []
+    for col in range(env.grid_size[1]):
+        value_row.append(f"{V[row, col]:.2f}")
+    print(" ".join(value_row))
+
+# Optional: Print or log the final average reward after evaluation
+print(f"Final average reward over 100 episodes: {average_reward:.2f}")
