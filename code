@@ -1,0 +1,89 @@
+import numpy as np
+import gym
+from gym import spaces
+
+class TreasureHuntEnv(gym.Env):
+    def __init__(self):
+        super(TreasureHuntEnv, self).__init__()
+        
+        # Define grid layout (5x5 grid with treasures)
+        self.grid = [
+            ['S', 'F', 'F', 'H', 'T'],
+            ['F', 'H', 'F', 'F', 'F'],
+            ['F', 'F', 'F', 'T', 'F'],
+            ['T', 'F', 'H', 'F', 'F'],
+            ['F', 'F', 'F', 'F', 'G']
+        ]
+        
+        self.grid_size = (5, 5)  # Grid size 5x5
+        self.treasure_positions = [(0, 4), (2, 3), (3, 0)]  # Coordinates of treasure tiles (T)
+        self.start = (0, 0)  # Starting position (S)
+        self.goal = (4, 4)  # Goal position (G)
+        
+        # Define action space: 4 actions (up, down, left, right)
+        self.action_space = spaces.Discrete(4)
+        
+        # Define observation space: (row, col, treasure_collected)
+        self.observation_space = spaces.Tuple((
+            spaces.Discrete(self.grid_size[0]),  # Row
+            spaces.Discrete(self.grid_size[1]),  # Column
+            spaces.MultiBinary(len(self.treasure_positions))  # Treasures collected
+        ))
+
+        # Initialize state (row, col, treasures_collected)
+        self.state = (0, 0, [False] * len(self.treasure_positions))  # Start position with no treasures collected
+
+    def reset(self):
+        """Reset the environment to the initial state."""
+        self.state = (0, 0, [False] * len(self.treasure_positions))  # Reset state to start position
+        return self.state
+
+    def step(self, action):
+        """Execute one step of the environment, based on the action."""
+        row, col, treasures_collected = self.state
+        
+        # Define movement directions (up, down, left, right)
+        move_dict = {
+            0: (-1, 0),  # up
+            1: (1, 0),   # down
+            2: (0, -1),  # left
+            3: (0, 1)    # right
+        }
+        
+        # Calculate new position
+        new_row = row + move_dict[action][0]
+        new_col = col + move_dict[action][1]
+        
+        # Ensure the new position is within grid bounds
+        if new_row < 0 or new_row >= self.grid_size[0] or new_col < 0 or new_col >= self.grid_size[1]:
+            new_row, new_col = row, col  # If out of bounds, stay in place
+        
+        # Get the tile at the new position
+        tile = self.grid[new_row][new_col]
+        
+        # Update treasure collection status
+        if tile == 'T' and not treasures_collected[self.treasure_positions.index((new_row, new_col))]:
+            treasures_collected[self.treasure_positions.index((new_row, new_col))] = True
+            reward = 5  # Collecting a treasure
+            tile = 'F'  # Convert the treasure tile into a frozen tile (F)
+        elif tile == 'F':
+            reward = 0  # No reward for frozen tiles
+        elif tile == 'H':
+            reward = -10  # Falling into a hole (H)
+            done = True
+        elif tile == 'G':
+            reward = 10  # Reaching the goal (G)
+            done = True
+        else:
+            reward = 0  # Default reward for other tiles
+        
+        # Update the state with the new position and treasure collection status
+        self.state = (new_row, new_col, treasures_collected)
+        
+        return self.state, reward, done, {}
+
+    def render(self):
+        """Visualize the environment."""
+        print(f"Position: {self.state[:2]} | Treasures collected: {self.state[2]}")
+        for row in self.grid:
+            print(" ".join(row))
